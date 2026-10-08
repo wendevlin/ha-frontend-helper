@@ -1,0 +1,55 @@
+# haf
+
+Home Assistant **f**rontend dev helper. It checks out PRs (optionally into their own git worktree), and it switches which frontend your local core serves **without restarting core**.
+
+## Install
+
+```sh
+bun install
+bun run install-bin        # builds a single binary to ~/.local/bin/haf
+haf init                   # one-time setup, then restart core once
+haf warp                   # optional: add haf workflows to Warp
+eval "$(haf completions zsh)"   # optional: add to ~/.zshrc
+```
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `haf prc 12345` | `gh pr checkout` in the main checkout |
+| `haf prc 12345 --tree [name]` | Check out into `<trees>/pr-12345-<branch>` (or `<name>`) as a worktree |
+| `haf use [tree]` | Interactive pick of the frontend core serves; refresh the browser and it's live |
+| `haf dev [tree]` | `script/develop` in the tree plus live mirroring of each rebuild |
+| `haf sync [--watch]` | Re-mirror the active tree (e.g. after `script/build_frontend`) |
+| `haf ls` / `haf status` | Show trees, build state, PRs and the core setup |
+| `haf rm [tree]` | Remove a worktree (and optionally its branch) |
+| `cd "$(haf path 12345)"` | Jump into a tree |
+
+`prc` also takes `--install` / `--no-install` (run `script/setup`) and `--use` / `--no-use`. Trees can be referred to by directory name, branch or PR number.
+
+## How switching works without restarts
+
+Core is pointed once at a stable directory:
+
+```yaml
+frontend:
+  development_repo: ~/.local/share/haf/frontend
+```
+
+With `development_repo` set, core serves `frontend_latest/`, `static/` and the others through plain aiohttp static resources. Those resolve their directory path once at startup and then read files on every request, and `index.html` is re-read on every request too. A symlink switch therefore needs a restart, but replacing the *contents* of a fixed directory does not.
+
+`haf use` rebuilds `hass_frontend/` in that directory as **hardlinks** to the chosen tree's build, then swaps it in atomically. This is instant and costs no extra disk. `haf dev` and `haf sync --watch` keep re-linking while `script/develop` rebuilds. If you switch to another tree, an older `haf dev` stops mirroring.
+
+The mirror dir must be on the same filesystem as your trees for hardlinks. `haf init` picks a location that is, and otherwise haf falls back to copying.
+
+## Config
+
+`~/.config/haf/config.json` holds `frontendRepo`, `treesDir`, `mirrorDir`, `coreConfigDir` and `active`. Re-run `haf init` to change them.
+
+## Development
+
+```sh
+bun src/index.ts <command>   # run from source
+bun test
+bun run typecheck
+```

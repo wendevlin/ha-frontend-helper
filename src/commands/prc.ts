@@ -1,0 +1,130 @@
+import { $ } from "bun";
+import { defineCommand } from "citty";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { HafError, loadConfig, type Config } from "../config";
+import { assertTools, isDirty, listTrees, prView, recordPr, run, slug, type PrInfo, type Tree } from "../git";
+import { describeTree } from "../trees";
+import { confirm, link, p, pc, tildify } from "../ui";
+import { useTree } from "./use";
+
+interface PrcArgs {
+  number: number;
+  /** undefined: no worktree; "": worktree with generated name; else worktree name. */
+  tree?: string;
+}
+
+/**
+ * `--tree` takes an optional value, which flag parsers can't express, so parse it by
+ * hand: `prc 123 --tree`, `prc 123 --tree name`, `prc --tree=name 123`, `prc -t 123`.
+ */
+export function parsePrcArgs(raw: string[]): PrcArgs {
+  const positionals: string[] = [];
+  let tree: string | undefined;
+  let treeValueIndex = -1;
+
+  for (let i = 0; i < raw.length; i++) {
+    const arg = raw[i]!;
+    if (arg === "--tree" || arg === "-t") {
+      tree = "";
+      const next = raw[i + 1];
+      if (next !== undefined && !next.startsWith("-")) treeValueIndex = positionals.length;
+    } else if (arg.startsWith("--tree=")) {
+      tree = arg.slice("--tree=".length);
+    } else if (!arg.startsWith("-")) {
+      positionals.push(arg);
+    }
+  }
+
+  // The token after a bare --tree is its name, unless we'd lose the PR number.
+  if (treeValueIndex !== -1 && positionals.length > 1) {
+    tree = positionals.splice(treeValueIndex, 1)[0];
+  }
+
+  const number = Number(positionals[0]?.replace(/^#/, ""));
+  if (!Number.isInteger(number) || number <= 0) {
+    throw new HafError("Usage: haf prc <pr-number> [--tree [name]]");
+  }
+  return { number, tree };
+}
+
+async function checkoutInMain(config: Config, pr: PrInfo): Promise<string> {
+  if (await isDirty(config.frontendRepo)) {
+    const go = await confirm({ message: "The main checkout has uncommitted changes. Check out anyway?", initialValue: false });
+    if (!go) process.exit(1);
+  }
+  await run(["gh", "pr", "checkout", String(pr.number)], config.frontendRepo);
+  return config.frontendRepo;
+}
+
+async function checkoutInTree(config: Config, pr: PrInfo, name: string): Promise<string> {
+  const path = join(config.treesDir, name);
+  if (existsSync(path)) throw new HafError(`${tildify(path)} already exists. Pick another name with --tree <name>.`);
+
+  mkdirSync(config.treesDir, { recursive: true });
+  await run(["git", "worktree", "add", "--detach", path], config.frontendRepo);
+  try {
+    const res = await $`gh pr checkout ${pr.number}`.cwd(path).nothrow();
+    if (res.exitCode !== 0) {
+      // Usually the PR branch name is already checked out in another tree (e.g. a fork's "dev").
+      p.log.warn(`Retrying with a dedicated branch name pr-${pr.number}`);
+      await run(["gh", "pr", "checkout", String(pr.number), "--branch", `pr-${pr.number}`], path);
+    }
+  } catch (err) {
+    await $`git worktree remove --force ${path}`.cwd(config.frontendRepo).nothrow().quiet();
+    throw err;
+  }
+  return path;
+}
+
+export default defineCommand({
+  meta: { name: "prc", description: "Check out a pull request, optionally into its own worktree" },
+  args: {
+    number: { type: "positional", required: false, description: "PR number" },
+    tree: { type: "string", alias: "t", valueHint: "name", description: "Check out into a worktree (name optional)" },
+    install: { type: "boolean", description: "Run script/setup afterwards (--no-install to skip)" },
+    use: { type: "boolean", description: "Switch core to the checkout afterwards" },
+  },
+  async run({ args, rawArgs }) {
+    await assertTools("git", "gh");
+    const config = loadConfig();
+    const { number, tree } = parsePrcArgs(rawArgs);
+
+    p.intro(pc.bgMagenta(pc.black(" haf prc ")));
+    const spin = p.spinner();
+    spin.start(`Loading PR #${number}`);
+    const pr = await prView(config.frontendRepo, number).finally(() => spin.stop(`PR #${number}`));
+    p.log.info(`${link(pc.bold(pr.title), pr.url)}\n${pc.dim(`by ${pr.author.login} · ${pr.headRefName}`)}`);
+
+    let path: string;
+    if (tree === undefined) {
+      path = await checkoutInMain(config, pr);
+    } else {
+      const existing = (await listTrees(config.frontendRepo)).find(
+        (t) => !t.isMain && (t.pr === number || t.branch === pr.headRefName),
+      );
+      if (existing) {
+        p.log.info(`PR #${number} already has a worktree: ${pc.bold(existing.name)} ${pc.dim(tildify(existing.path))}`);
+        await $`gh pr checkout ${number}`.cwd(existing.path).nothrow();
+        path = existing.path;
+      } else {
+        path = await checkoutInTree(config, pr, tree || `pr-${number}-${slug(pr.headRefName)}`);
+      }
+    }
+    await recordPr(path, number);
+    p.log.success(`Checked out at ${link(tildify(path), `file://${path}`)}`);
+
+    const install =
+      args.install ??
+      await confirm({ message: "Install dependencies (script/setup)?", initialValue: path !== config.frontendRepo });
+    if (install) await run(["script/setup"], path);
+
+    const target: Tree | undefined = (await listTrees(config.frontendRepo)).find((t) => t.path === path);
+    if (!target) throw new HafError(`Could not find the worktree at ${path}`);
+    p.log.message(describeTree(target));
+
+    const use = args.use ?? await confirm({ message: "Switch core to this frontend now?" });
+    if (use) return useTree(config, target);
+    p.outro(path === config.frontendRepo ? "Done." : `Done. ${pc.dim(`cd ${tildify(path)}`)}`);
+  },
+});

@@ -1,0 +1,25 @@
+{
+  "name": "haf",
+  "version": "0.1.0",
+  "description": "Home Assistant frontend dev helper: PR checkouts, worktrees and restart-free frontend switching",
+  "type": "module",
+  "bin": {
+    "haf": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun src/index.ts",
+    "build": "bun build src/index.ts --compile --outfile dist/haf",
+    "install-bin": "bun run build && mkdir -p ~/.local/bin && cp dist/haf ~/.local/bin/haf",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1",
+    "citty": "^0.2.2",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
+  }
+}
