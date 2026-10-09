@@ -21,14 +21,14 @@ export function activate(config: Config, tree: Tree): Config {
 }
 
 /** Switch to a tree, offering to start a dev build when it has none. */
-export async function useTree(config: Config, tree: Tree): Promise<void> {
+export async function useTree(config: Config, tree: Tree, opts: { dev?: boolean } = {}): Promise<void> {
   config = activate(config, tree);
   if (tree.builtAt) {
     p.outro(`Refresh your browser ${pc.dim("— no core restart needed")}`);
     return;
   }
   p.log.warn(`${tree.name} has no build yet, so the frontend will be empty until it is built.`);
-  const dev = await confirm({ message: "Start `haf dev` (script/develop) for it now?" });
+  const dev = opts.dev ?? (await confirm({ message: "Start `haf dev` (script/develop) for it now?" }));
   if (dev) await runDev(config, tree);
   else p.outro(`Run ${pc.cyan("haf dev")} when you're ready to build it.`);
 }

@@ -9,9 +9,13 @@ Requires Node.js 22+, `git` and the GitHub CLI (`gh`).
 ```sh
 npm install -g ha-frontend-helper   # provides the `haf` command
 haf init                   # one-time setup, then restart core once
+haf prc --set-defaults     # recommended: stop answering the same questions every time
 haf warp                   # optional: add haf workflows to Warp
 eval "$(haf completions zsh)"   # optional: add to ~/.zshrc
 ```
+
+> [!TIP]
+> `haf prc` asks up to four questions per checkout: install dependencies, open VS Code, switch core and start `haf dev`. Run **`haf prc --set-defaults`** once and choose *Ask*, *Always* or *Never* for each. For example, always install and open VS Code but never start the dev build, and `haf prc 12345 --tree` runs straight through. You can still override a single run with flags like `--no-install`.
 
 ## Commands
 
@@ -19,6 +23,7 @@ eval "$(haf completions zsh)"   # optional: add to ~/.zshrc
 | --- | --- |
 | `haf prc 12345` | `gh pr checkout` in the main checkout |
 | `haf prc 12345 --tree [name]` | Check out into `<trees>/pr-12345-<branch>` (or `<name>`) as a worktree |
+| `haf prc --set-defaults` | Choose Ask / Always / Never for each `prc` question |
 | `haf use [tree]` | Interactive pick of the frontend core serves; refresh the browser and it's live |
 | `haf dev [tree]` | `script/develop` in the tree plus live mirroring of each rebuild |
 | `haf sync [--watch]` | Re-mirror the active tree (e.g. after `script/build_frontend`) |
@@ -27,7 +32,7 @@ eval "$(haf completions zsh)"   # optional: add to ~/.zshrc
 | `cd "$(haf path 12345)"` | Jump into a tree |
 | `haf code [tree]` | Open a tree in a new VS Code window |
 
-`prc` also takes `--install` / `--no-install` (run `script/setup`), `--use` / `--no-use` and `--code` / `--no-code`. When run from VS Code's integrated terminal, `prc --tree` asks whether to open the new worktree in a new VS Code window. Trees can be referred to by directory name, branch or PR number.
+`prc` also takes `--install` / `--no-install` (run `script/setup`), `--use` / `--no-use`, `--code` / `--no-code` and `--dev` / `--no-dev` (start `haf dev` when the checkout has no build). Each of these overrides your [`--set-defaults`](#install) for that run. When run from VS Code's integrated terminal, `prc --tree` asks whether to open the new worktree in a new VS Code window. Trees can be referred to by directory name, branch or PR number.
 
 ## How switching works without restarts
 

@@ -2,11 +2,11 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { defineCommand } from "citty";
 import { $ } from "execa";
-import { type Config, HafError, loadConfig } from "../config";
-import { inVSCode, openInVSCode } from "../editor";
+import { type Choice, type Config, fromChoice, HafError, loadConfig, type PrcDefaults, updateConfig } from "../config";
+import { codeCli, inVSCode, openInVSCode } from "../editor";
 import { assertTools, isDirty, listTrees, type PrInfo, prView, recordPr, run, slug, type Tree } from "../git";
 import { describeTree } from "../trees";
-import { confirm, link, p, pc, tildify } from "../ui";
+import { confirm, link, p, pc, tildify, unwrap } from "../ui";
 import { useTree } from "./use";
 
 interface PrcArgs {
@@ -81,6 +81,34 @@ async function checkoutInTree(config: Config, pr: PrInfo, name: string): Promise
   return path;
 }
 
+const DEFAULT_STEPS: { key: keyof PrcDefaults; message: string }[] = [
+  { key: "install", message: "Install dependencies (script/setup)?" },
+  { key: "code", message: "Open new worktrees in a new VS Code window?" },
+  { key: "use", message: "Switch core to the checkout?" },
+  { key: "dev", message: "Start `haf dev` when the checkout has no build yet?" },
+];
+
+async function setDefaults(config: Config): Promise<void> {
+  if (!process.stdin.isTTY) throw new HafError("--set-defaults is interactive; run it in a terminal.");
+  p.intro(pc.bgMagenta(pc.black(" haf prc --set-defaults ")));
+  const defaults: PrcDefaults = {};
+  for (const { key, message } of DEFAULT_STEPS) {
+    defaults[key] = unwrap(
+      await p.select<Choice>({
+        message,
+        initialValue: config.prc?.[key] ?? "ask",
+        options: [
+          { value: "ask", label: "Ask" },
+          { value: "always", label: "Always" },
+          { value: "never", label: "Never" },
+        ],
+      }),
+    );
+  }
+  updateConfig({ prc: defaults });
+  p.outro(`Saved. Flags like ${pc.cyan("--no-install")} still override these per run.`);
+}
+
 export default defineCommand({
   meta: { name: "prc", description: "Check out a pull request, optionally into its own worktree" },
   args: {
@@ -89,10 +117,14 @@ export default defineCommand({
     install: { type: "boolean", description: "Run script/setup afterwards (--no-install to skip)" },
     use: { type: "boolean", description: "Switch core to the checkout afterwards" },
     code: { type: "boolean", description: "Open a new worktree in a new VS Code window (--no-code to skip)" },
+    dev: { type: "boolean", description: "Start `haf dev` if the checkout has no build (--no-dev to skip)" },
+    "set-defaults": { type: "boolean", description: "Choose which steps to always/never do instead of asking" },
   },
   async run({ args, rawArgs }) {
-    await assertTools("git", "gh");
     const config = loadConfig();
+    if (args["set-defaults"]) return setDefaults(config);
+    await assertTools("git", "gh");
+    const defaults = config.prc ?? {};
     const { number, tree } = parsePrcArgs(rawArgs);
 
     p.intro(pc.bgMagenta(pc.black(" haf prc ")));
@@ -121,6 +153,7 @@ export default defineCommand({
 
     const install =
       args.install ??
+      fromChoice(defaults.install) ??
       (await confirm({ message: "Install dependencies (script/setup)?", initialValue: path !== config.frontendRepo }));
     if (install) await run(["script/setup"], path);
 
@@ -130,11 +163,16 @@ export default defineCommand({
 
     // Only worktrees: the main checkout is usually the window you're already in.
     const code =
-      args.code ?? (!target.isMain && inVSCode() && (await confirm({ message: "Open it in a new VS Code window?" })));
-    if (code) await openInVSCode(path);
+      args.code ??
+      (!target.isMain &&
+        (fromChoice(defaults.code) ??
+          (inVSCode() && (await confirm({ message: "Open it in a new VS Code window?" })))));
+    if (code && !args.code && !codeCli()) p.log.warn("Not opening VS Code: the `code` command is not on your PATH.");
+    else if (code) await openInVSCode(path);
 
-    const use = args.use ?? (await confirm({ message: "Switch core to this frontend now?" }));
-    if (use) return useTree(config, target);
+    const use =
+      args.use ?? fromChoice(defaults.use) ?? (await confirm({ message: "Switch core to this frontend now?" }));
+    if (use) return useTree(config, target, { dev: args.dev ?? fromChoice(defaults.dev) });
     p.outro(path === config.frontendRepo ? "Done." : `Done. ${pc.dim(`cd ${tildify(path)}`)}`);
   },
 });

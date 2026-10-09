@@ -24,6 +24,13 @@ export default defineCommand({
         `Worktrees       ${tildify(config.treesDir)} ${pc.dim(`(${trees.length - 1})`)}`,
         `Core serves     ${tildify(config.mirrorDir)}`,
         `Config          ${tildify(CONFIG_PATH)}`,
+        `prc defaults    ${
+          config.prc
+            ? Object.entries(config.prc)
+                .map(([step, choice]) => `${step}: ${choice}`)
+                .join(", ")
+            : pc.dim("ask everything (haf prc --set-defaults)")
+        }`,
       ].join("\n"),
     );
 

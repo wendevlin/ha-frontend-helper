@@ -31,7 +31,7 @@ _haf() {
       trees=(\${(f)"$(haf ls --names 2>/dev/null)"})
       _describe 'tree' trees ;;
     prc)
-      _arguments '(-t --tree)'{-t,--tree}'[check out into a worktree]::name:' '--install[run script/setup]' '--no-install[skip script/setup]' '--use[switch core to it]' '--code[open in a new VS Code window]' '--no-code[do not open VS Code]' ;;
+      _arguments '(-t --tree)'{-t,--tree}'[check out into a worktree]::name:' '--install[run script/setup]' '--no-install[skip script/setup]' '--use[switch core to it]' '--code[open in a new VS Code window]' '--no-code[do not open VS Code]' '--dev[start haf dev if unbuilt]' '--no-dev[do not start haf dev]' '--set-defaults[choose default answers]' ;;
     sync)
       _arguments '(-w --watch)'{-w,--watch}'[keep syncing]' ;;
     completions)
@@ -49,7 +49,7 @@ const bash = `_haf() {
   fi
   case \${COMP_WORDS[1]} in
     ${TREE_COMMANDS.join("|")}) COMPREPLY=($(compgen -W "$(haf ls --names 2>/dev/null)" -- "$cur")) ;;
-    prc) COMPREPLY=($(compgen -W "--tree --install --no-install --use --code --no-code" -- "$cur")) ;;
+    prc) COMPREPLY=($(compgen -W "--tree --install --no-install --use --code --no-code --dev --no-dev --set-defaults" -- "$cur")) ;;
     sync) COMPREPLY=($(compgen -W "--watch" -- "$cur")) ;;
     completions) COMPREPLY=($(compgen -W "zsh bash fish" -- "$cur")) ;;
   esac
@@ -66,6 +66,9 @@ complete -c haf -n "__fish_seen_subcommand_from prc" -l no-install -d "Skip scri
 complete -c haf -n "__fish_seen_subcommand_from prc" -l use -d "Switch core to it"
 complete -c haf -n "__fish_seen_subcommand_from prc" -l code -d "Open in a new VS Code window"
 complete -c haf -n "__fish_seen_subcommand_from prc" -l no-code -d "Don't open VS Code"
+complete -c haf -n "__fish_seen_subcommand_from prc" -l dev -d "Start haf dev if unbuilt"
+complete -c haf -n "__fish_seen_subcommand_from prc" -l no-dev -d "Don't start haf dev"
+complete -c haf -n "__fish_seen_subcommand_from prc" -l set-defaults -d "Choose default answers"
 complete -c haf -n "__fish_seen_subcommand_from sync" -s w -l watch -d "Keep syncing"
 complete -c haf -n "__fish_seen_subcommand_from completions" -a "zsh bash fish"
 `;

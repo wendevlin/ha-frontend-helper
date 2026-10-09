@@ -13,6 +13,23 @@ export interface Config {
   active?: string;
   /** Core config dir (contains configuration.yaml), if known. */
   coreConfigDir?: string;
+  /** Answers `haf prc` uses instead of asking; set with `haf prc --set-defaults`. */
+  prc?: PrcDefaults;
+}
+
+/** How `haf prc` handles a yes/no step: prompt, or answer it without asking. */
+export type Choice = "ask" | "always" | "never";
+
+export interface PrcDefaults {
+  install?: Choice;
+  code?: Choice;
+  use?: Choice;
+  dev?: Choice;
+}
+
+/** A stored choice as a fixed answer, or undefined to prompt. */
+export function fromChoice(choice: Choice | undefined): boolean | undefined {
+  return choice === "always" ? true : choice === "never" ? false : undefined;
 }
 
 const xdg = (env: string, fallback: string) => process.env[env] || join(homedir(), fallback);
