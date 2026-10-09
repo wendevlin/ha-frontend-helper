@@ -27,7 +27,7 @@ export async function useTree(config: Config, tree: Tree, opts: { dev?: boolean 
     p.outro(`Refresh your browser ${pc.dim("— no core restart needed")}`);
     return;
   }
-  p.log.warn(`${tree.name} has no build yet, so the frontend will be empty until it is built.`);
+  p.log.warn(`${tree.name} has no build yet. Core shows a placeholder page until it's built.`);
   const dev = opts.dev ?? (await confirm({ message: "Start `haf dev` (script/develop) for it now?" }));
   if (dev) await runDev(config, tree);
   else p.outro(`Run ${pc.cyan("haf dev")} when you're ready to build it.`);

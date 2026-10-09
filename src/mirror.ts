@@ -6,13 +6,15 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   statSync,
   unlinkSync,
   watch,
+  writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 /**
  * Core skips registering static dirs that don't exist at startup, so keep these
@@ -20,11 +22,67 @@ import { join } from "node:path";
  */
 const REQUIRED_DIRS = ["static", "frontend_latest", "frontend_es5"];
 
+/** Marks the placeholder index.html so syncs leave it alone until a real one exists. */
+const PLACEHOLDER_MARKER = "<!-- haf-placeholder -->";
+
+/**
+ * Served while the active tree has no index.html (not built yet, or mid-build), so
+ * core shows what to do instead of a 500. It reloads itself until the build lands.
+ * Core renders index.html as a Jinja template, so keep it free of {{ and {%.
+ */
+function placeholderHtml(treeName: string): string {
+  return `${PLACEHOLDER_MARKER}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="5">
+<title>Waiting for ${treeName} to build</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center;
+         background: #111; color: #e1e1e1; }
+  main { max-width: 34rem; padding: 2rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
+  code { background: #2a2a2a; padding: .15em .4em; border-radius: 4px; }
+  p.dim { color: #9a9a9a; font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Waiting for ${treeName} to build</h1>
+  <p>Core is switched to this frontend, but it has no build yet. If <code>haf dev</code> isn't running, start it in that tree:</p>
+  <p><code>haf dev</code></p>
+  <p class="dim">This page reloads every 5 seconds and turns into the real frontend once the first build is done. No core restart needed.</p>
+</main>
+</body>
+</html>
+`;
+}
+
+function isPlaceholder(path: string): boolean {
+  try {
+    return readFileSync(path, "utf8").startsWith(PLACEHOLDER_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+/** Write the placeholder when there is no index.html; returns whether one is being served. */
+function ensureIndex(dir: string, treeName: string): boolean {
+  const index = join(dir, "index.html");
+  if (existsSync(index)) return isPlaceholder(index);
+  writeFileSync(index, placeholderHtml(treeName));
+  return true;
+}
+
 export interface SyncResult {
   files: number;
   linked: number;
   removed: number;
   copied: boolean;
+  /** The tree has no index.html yet, so core shows the haf placeholder page. */
+  placeholder: boolean;
 }
 
 export const buildDir = (treePath: string) => join(treePath, "hass_frontend");
@@ -46,7 +104,7 @@ function place(src: string, dst: string, result: SyncResult): void {
  * Make `dst` mirror `src` in place. Files already hardlinked to the same inode are
  * skipped, so re-running this is cheap (a stat per file).
  */
-function syncDir(src: string, dst: string, result: SyncResult): void {
+function syncDir(src: string, dst: string, result: SyncResult, top = true): void {
   mkdirSync(dst, { recursive: true });
   const seen = new Set<string>();
 
@@ -58,7 +116,7 @@ function syncDir(src: string, dst: string, result: SyncResult): void {
 
     if (entry.isDirectory()) {
       if (dstStat && !dstStat.isDirectory()) unlinkSync(d);
-      syncDir(s, d, result);
+      syncDir(s, d, result, false);
       continue;
     }
     if (!entry.isFile()) continue;
@@ -80,8 +138,13 @@ function syncDir(src: string, dst: string, result: SyncResult): void {
   }
 
   for (const name of readdirSync(dst)) {
-    if (!seen.has(name)) {
-      rmSync(join(dst, name), { recursive: true, force: true });
+    if (seen.has(name)) continue;
+    const path = join(dst, name);
+    if (top && name === "index.html" && isPlaceholder(path)) continue;
+    // Required dirs must survive (see REQUIRED_DIRS), but not with stale files in them.
+    const entries = top && REQUIRED_DIRS.includes(name) ? readdirSync(path).map((e) => join(path, e)) : [path];
+    for (const entry of entries) {
+      rmSync(entry, { recursive: true, force: true });
       result.removed++;
     }
   }
@@ -92,7 +155,7 @@ function ensureRequiredDirs(dir: string): void {
 }
 
 function emptyResult(): SyncResult {
-  return { files: 0, linked: 0, removed: 0, copied: false };
+  return { files: 0, linked: 0, removed: 0, copied: false, placeholder: false };
 }
 
 /**
@@ -111,6 +174,7 @@ export function switchMirror(treePath: string, mirrorDir: string): SyncResult {
   rmSync(old, { recursive: true, force: true });
   if (existsSync(src)) syncDir(src, next, result);
   ensureRequiredDirs(next);
+  result.placeholder = ensureIndex(next, basename(treePath));
 
   if (existsSync(live)) renameSync(live, old);
   renameSync(next, live);
@@ -127,6 +191,7 @@ export function syncMirror(treePath: string, mirrorDir: string): SyncResult | un
   const live = mirrorBuildDir(mirrorDir);
   syncDir(src, live, result);
   ensureRequiredDirs(live);
+  result.placeholder = ensureIndex(live, basename(treePath));
   return result;
 }
 

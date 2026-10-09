@@ -129,3 +129,42 @@ test("watchMirror pauses when the guard says the tree is no longer active", asyn
   stop();
   expect(existsSync(live("frontend_latest/new.js"))).toBe(false);
 });
+
+test("an unbuilt tree gets a placeholder index.html until its build lands", () => {
+  mkdirSync(tree("a"), { recursive: true });
+  const result = switchMirror(tree("a"), mirror());
+
+  expect(result.placeholder).toBe(true);
+  expect(readFileSync(live("index.html"), "utf8")).toContain("haf dev");
+
+  // Build output appears without index.html yet: keep the placeholder, don't churn it.
+  writeBuild("a", { "frontend_latest/app.js": "v1" });
+  const partial = syncMirror(tree("a"), mirror());
+  expect(partial?.placeholder).toBe(true);
+  expect(partial?.removed).toBe(0);
+
+  writeBuild("a", { "index.html": "A" });
+  const built = syncMirror(tree("a"), mirror());
+  expect(built?.placeholder).toBe(false);
+  expect(readFileSync(live("index.html"), "utf8")).toBe("A");
+});
+
+test("the placeholder returns if index.html disappears mid-build", () => {
+  writeBuild("a", { "index.html": "A" });
+  switchMirror(tree("a"), mirror());
+  rmSync(join(tree("a"), "hass_frontend/index.html"));
+
+  expect(syncMirror(tree("a"), mirror())?.placeholder).toBe(true);
+  expect(readFileSync(live("index.html"), "utf8")).toContain("haf dev");
+});
+
+test("required dirs missing from the build are emptied, not churned", () => {
+  writeBuild("a", { "index.html": "A", "frontend_es5/old.js": "x" });
+  switchMirror(tree("a"), mirror());
+  rmSync(join(tree("a"), "hass_frontend/frontend_es5"), { recursive: true });
+
+  expect(syncMirror(tree("a"), mirror())?.removed).toBe(1);
+  expect(existsSync(live("frontend_es5/old.js"))).toBe(false);
+  expect(existsSync(live("frontend_es5"))).toBe(true);
+  expect(syncMirror(tree("a"), mirror())?.removed).toBe(0);
+});
