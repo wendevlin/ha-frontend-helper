@@ -1,6 +1,6 @@
 {
   "name": "ha-frontend-helper",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Home Assistant frontend dev helper: PR checkouts, worktrees and restart-free frontend switching",
   "keywords": [
     "home-assistant",
