@@ -10,6 +10,9 @@ export interface Tree {
   head: string;
   isMain: boolean;
   pr?: number;
+  /** PR title and author, recorded at checkout. */
+  title?: string;
+  author?: string;
   /** mtime of the built hass_frontend, if there is a build. */
   builtAt?: Date;
 }
@@ -55,20 +58,40 @@ export async function listTrees(repo: string): Promise<Tree[]> {
       builtAt: buildTime(path),
     });
   }
-  await Promise.all(trees.map(async (t) => (t.pr = await prForTree(repo, t))));
+
+  const pattern = String.raw`^branch\..*\.(haf-pr|haf-title|haf-author|merge)$`;
+  const { stdout } = await $({ cwd: repo, reject: false })`git config --get-regexp ${pattern}`;
+  const meta = parseBranchMeta(stdout);
+  for (const tree of trees) {
+    const vars = (tree.branch && meta.get(tree.branch)) || new Map<string, string>();
+    tree.pr = prNumber(tree, vars);
+    tree.title = vars.get("haf-title");
+    tree.author = vars.get("haf-author");
+  }
   return trees;
 }
 
-async function prForTree(repo: string, tree: Tree): Promise<number | undefined> {
-  if (tree.branch) {
-    const { stdout: recorded } = await $({ cwd: repo, reject: false })`git config --get branch.${tree.branch}.haf-pr`;
-    if (recorded) return Number(recorded);
-    // gh pr checkout records the PR ref as the branch's merge target for fork PRs.
-    const { stdout: merge } = await $({ cwd: repo, reject: false })`git config --get branch.${tree.branch}.merge`;
-    const m = merge.match(/refs\/pull\/(\d+)\/head/);
-    if (m) return Number(m[1]);
+/** Parse `git config --get-regexp ^branch\.` output into branch → variable → value. */
+export function parseBranchMeta(stdout: string): Map<string, Map<string, string>> {
+  const meta = new Map<string, Map<string, string>>();
+  for (const line of stdout.split("\n")) {
+    const space = line.indexOf(" ");
+    if (space === -1) continue;
+    const key = line.slice(0, space);
+    // Branch names may contain dots, variable names can't: split at the last one.
+    const dot = key.lastIndexOf(".");
+    const branch = key.slice("branch.".length, dot);
+    if (!meta.has(branch)) meta.set(branch, new Map());
+    meta.get(branch)?.set(key.slice(dot + 1), line.slice(space + 1));
   }
-  const m = tree.name.match(/^pr-(\d+)/);
+  return meta;
+}
+
+function prNumber(tree: Tree, vars: Map<string, string>): number | undefined {
+  const recorded = vars.get("haf-pr");
+  if (recorded) return Number(recorded);
+  // gh pr checkout records the PR ref as the branch's merge target for fork PRs.
+  const m = vars.get("merge")?.match(/refs\/pull\/(\d+)\/head/) ?? tree.name.match(/^pr-(\d+)/);
   return m ? Number(m[1]) : undefined;
 }
 
@@ -89,10 +112,37 @@ export async function prView(repo: string, number: number): Promise<PrInfo> {
   return JSON.parse(res.stdout) as PrInfo;
 }
 
-/** Remember which PR a checkout's branch belongs to (gh only records it for fork PRs). */
-export async function recordPr(path: string, number: number): Promise<void> {
+/** Remember which PR a checkout's branch belongs to (gh only records the number for fork PRs). */
+export async function recordPr(path: string, pr: Pick<PrInfo, "number" | "title" | "author">): Promise<void> {
   const { stdout: branch } = await $({ cwd: path })`git branch --show-current`;
-  if (branch) await $({ cwd: path })`git config branch.${branch}.haf-pr ${number}`;
+  if (!branch) return;
+  await $({ cwd: path })`git config branch.${branch}.haf-pr ${pr.number}`;
+  await $({ cwd: path })`git config branch.${branch}.haf-title ${pr.title}`;
+  await $({ cwd: path })`git config branch.${branch}.haf-author ${pr.author.login}`;
+}
+
+/**
+ * Look up and record titles for PR trees checked out before haf stored them.
+ * Best effort: without gh or network the trees just stay untitled.
+ */
+export async function fillPrTitles(trees: Tree[]): Promise<void> {
+  const missing = trees.filter((t) => t.pr && t.branch && !(t.title && t.author));
+  if (missing.length === 0 || !which("gh")) return;
+  const found = await Promise.all(
+    missing.map(async (tree) => {
+      const number = tree.pr as number;
+      const res = await $({ cwd: tree.path, reject: false, timeout: 10_000 })`gh pr view ${number} --json title,author`;
+      if (res.exitCode !== 0) return undefined;
+      const { title, author } = JSON.parse(res.stdout) as Pick<PrInfo, "title" | "author">;
+      tree.title = title;
+      tree.author = author.login;
+      return { tree, pr: { number, title, author } };
+    }),
+  );
+  // Worktrees share one .git/config, so write one at a time to avoid its lock.
+  for (const entry of found) {
+    if (entry) await recordPr(entry.tree.path, entry.pr).catch(() => {});
+  }
 }
 
 export async function isDirty(path: string): Promise<boolean> {

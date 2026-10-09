@@ -31,7 +31,7 @@
     "dev": "bun src/index.ts",
     "build": "bun build src/index.ts --target=node --packages=external --outfile dist/haf.js",
     "build:bin": "bun build src/index.ts --compile --outfile dist/haf",
-    "install-bin": "bun run build:bin && mkdir -p ~/.local/bin && cp dist/haf ~/.local/bin/haf",
+    "install-bin": "bun run build:bin && mkdir -p ~/.local/bin && cp dist/haf ~/.local/bin/haf.new && mv ~/.local/bin/haf.new ~/.local/bin/haf",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",

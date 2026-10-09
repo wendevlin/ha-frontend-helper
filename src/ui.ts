@@ -39,6 +39,10 @@ export function relativeTime(date: Date): string {
   return `${Math.round(s / 86400)}d ago`;
 }
 
+export function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 export function tildify(path: string): string {
   const home = process.env.HOME;
   return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path;

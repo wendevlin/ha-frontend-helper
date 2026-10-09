@@ -1,12 +1,24 @@
 import { type Config, HafError } from "./config";
-import { findTree, listTrees, type Tree } from "./git";
-import { p, pc, relativeTime, tildify, unwrap } from "./ui";
+import { fillPrTitles, findTree, listTrees, type Tree } from "./git";
+import { p, pc, relativeTime, tildify, truncate, unwrap } from "./ui";
 
 export function describeTree(tree: Tree): string {
   const parts = [tree.branch ? pc.cyan(tree.branch) : pc.yellow(`detached ${tree.head}`)];
-  if (tree.pr) parts.push(pc.magenta(`#${tree.pr}`));
-  parts.push(tree.builtAt ? pc.green(`built ${relativeTime(tree.builtAt)}`) : pc.red("not built"));
+  // With a title, the PR number is already shown next to it (see treeTitle).
+  if (tree.pr && !tree.title) parts.push(pc.magenta(`#${tree.pr}`));
+  parts.push(buildState(tree));
   return parts.join(pc.dim(" · "));
+}
+
+function buildState(tree: Tree): string {
+  return tree.builtAt ? pc.green(`built ${relativeTime(tree.builtAt)}`) : pc.red("not built");
+}
+
+/** What a tree is about: "#123 PR title" when known, else its directory name. */
+export function treeTitle(tree: Tree, max = 80): string {
+  if (tree.isMain) return `${pc.bold(tree.name)} ${pc.dim("(main)")}`;
+  if (tree.pr && tree.title) return `${pc.magenta(`#${tree.pr}`)} ${pc.bold(truncate(tree.title, max))}`;
+  return pc.bold(tree.name);
 }
 
 /** Resolve a tree from a query, or ask interactively. */
@@ -22,6 +34,7 @@ export async function pickTree(
     return tree;
   }
   if (trees.length === 0) throw new HafError("No trees to choose from.");
+  await fillPrTitles(trees);
 
   return unwrap(
     await p.select({
@@ -29,8 +42,9 @@ export async function pickTree(
       initialValue: trees.find((t) => t.path === config.active) ?? trees[0],
       options: trees.map((tree) => ({
         value: tree,
-        label: `${tree.path === config.active ? pc.green("●") : " "} ${tree.isMain ? `${tree.name} ${pc.dim("(main)")}` : tree.name}`,
-        hint: `${describeTree(tree)} ${pc.dim(tildify(tree.path))}`,
+        label: `${tree.path === config.active ? pc.green("●") : " "} ${treeTitle(tree, 70)}`,
+        // The title already says what it is; keep the hint short enough not to wrap.
+        hint: tree.title ? `${tree.name} · ${buildState(tree)}` : `${describeTree(tree)} ${pc.dim(tildify(tree.path))}`,
       })),
     }),
   );

@@ -148,7 +148,7 @@ export default defineCommand({
         path = await checkoutInTree(config, pr, tree || `pr-${number}-${slug(pr.headRefName)}`);
       }
     }
-    await recordPr(path, number);
+    await recordPr(path, pr);
     p.log.success(`Checked out at ${link(tildify(path), `file://${path}`)}`);
 
     const install =
