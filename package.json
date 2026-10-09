@@ -1,24 +1,51 @@
 {
-  "name": "haf",
+  "name": "ha-frontend-helper",
   "version": "0.1.0",
   "description": "Home Assistant frontend dev helper: PR checkouts, worktrees and restart-free frontend switching",
+  "keywords": [
+    "home-assistant",
+    "frontend",
+    "git",
+    "worktree",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "wendevlin (https://github.com/wendevlin)",
+  "homepage": "https://github.com/wendevlin/ha-frontend-helper#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wendevlin/ha-frontend-helper.git"
+  },
+  "bugs": "https://github.com/wendevlin/ha-frontend-helper/issues",
   "type": "module",
   "bin": {
-    "haf": "src/index.ts"
+    "haf": "dist/haf.js"
+  },
+  "files": [
+    "dist/haf.js"
+  ],
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "dev": "bun src/index.ts",
-    "build": "bun build src/index.ts --compile --outfile dist/haf",
-    "install-bin": "bun run build && mkdir -p ~/.local/bin && cp dist/haf ~/.local/bin/haf",
+    "build": "bun build src/index.ts --target=node --packages=external --outfile dist/haf.js",
+    "build:bin": "bun build src/index.ts --compile --outfile dist/haf",
+    "install-bin": "bun run build:bin && mkdir -p ~/.local/bin && cp dist/haf ~/.local/bin/haf",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "prepublishOnly": "bun run lint && bun run typecheck && bun test && bun run build"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
     "citty": "^0.2.2",
+    "execa": "^10.1.0",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/bun": "^1.4.2",
     "typescript": "^7.0.2"
   }

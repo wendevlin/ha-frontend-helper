@@ -19,7 +19,9 @@ export default defineCommand({
 
     p.log.step(`Watching ${tildify(tree)}/hass_frontend — Ctrl+C to stop`);
     watchMirror(tree, config.mirrorDir, (r) => {
-      console.log(pc.dim(`[haf ${new Date().toLocaleTimeString()}] mirrored ${r.linked} changed, ${r.removed} removed`));
+      console.log(
+        pc.dim(`[haf ${new Date().toLocaleTimeString()}] mirrored ${r.linked} changed, ${r.removed} removed`),
+      );
     });
     await new Promise(() => {});
   },

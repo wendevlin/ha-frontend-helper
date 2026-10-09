@@ -1,8 +1,8 @@
 import { defineCommand } from "citty";
 import { HafError } from "../config";
 
-const COMMANDS = ["init", "prc", "use", "dev", "sync", "ls", "rm", "path", "status", "warp", "completions"];
-const TREE_COMMANDS = ["use", "dev", "rm", "path"];
+const COMMANDS = ["init", "prc", "use", "dev", "sync", "ls", "rm", "path", "code", "status", "warp", "completions"];
+const TREE_COMMANDS = ["use", "dev", "rm", "path", "code"];
 
 const zsh = `#compdef haf
 _haf() {
@@ -16,6 +16,7 @@ _haf() {
     'ls:List the main checkout and all worktrees'
     'rm:Remove a worktree'
     'path:Print a tree path'
+    'code:Open a tree in a new VS Code window'
     'status:Show the active frontend and core setup'
     'warp:Install Warp workflows'
     'completions:Print shell completions'
@@ -30,7 +31,7 @@ _haf() {
       trees=(\${(f)"$(haf ls --names 2>/dev/null)"})
       _describe 'tree' trees ;;
     prc)
-      _arguments '(-t --tree)'{-t,--tree}'[check out into a worktree]::name:' '--install[run script/setup]' '--no-install[skip script/setup]' '--use[switch core to it]' ;;
+      _arguments '(-t --tree)'{-t,--tree}'[check out into a worktree]::name:' '--install[run script/setup]' '--no-install[skip script/setup]' '--use[switch core to it]' '--code[open in a new VS Code window]' '--no-code[do not open VS Code]' ;;
     sync)
       _arguments '(-w --watch)'{-w,--watch}'[keep syncing]' ;;
     completions)
@@ -48,7 +49,7 @@ const bash = `_haf() {
   fi
   case \${COMP_WORDS[1]} in
     ${TREE_COMMANDS.join("|")}) COMPREPLY=($(compgen -W "$(haf ls --names 2>/dev/null)" -- "$cur")) ;;
-    prc) COMPREPLY=($(compgen -W "--tree --install --no-install --use" -- "$cur")) ;;
+    prc) COMPREPLY=($(compgen -W "--tree --install --no-install --use --code --no-code" -- "$cur")) ;;
     sync) COMPREPLY=($(compgen -W "--watch" -- "$cur")) ;;
     completions) COMPREPLY=($(compgen -W "zsh bash fish" -- "$cur")) ;;
   esac
@@ -63,6 +64,8 @@ complete -c haf -n "__fish_seen_subcommand_from prc" -s t -l tree -d "Check out 
 complete -c haf -n "__fish_seen_subcommand_from prc" -l install -d "Run script/setup"
 complete -c haf -n "__fish_seen_subcommand_from prc" -l no-install -d "Skip script/setup"
 complete -c haf -n "__fish_seen_subcommand_from prc" -l use -d "Switch core to it"
+complete -c haf -n "__fish_seen_subcommand_from prc" -l code -d "Open in a new VS Code window"
+complete -c haf -n "__fish_seen_subcommand_from prc" -l no-code -d "Don't open VS Code"
 complete -c haf -n "__fish_seen_subcommand_from sync" -s w -l watch -d "Keep syncing"
 complete -c haf -n "__fish_seen_subcommand_from completions" -a "zsh bash fish"
 `;
@@ -70,7 +73,7 @@ complete -c haf -n "__fish_seen_subcommand_from completions" -a "zsh bash fish"
 const scripts: Record<string, string> = { zsh, bash, fish };
 
 export default defineCommand({
-  meta: { name: "completions", description: "Print shell completions, e.g. eval \"$(haf completions zsh)\"" },
+  meta: { name: "completions", description: 'Print shell completions, e.g. eval "$(haf completions zsh)"' },
   args: {
     shell: { type: "positional", required: false, description: "zsh, bash or fish" },
   },

@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { loadConfig, updateConfig, type Config } from "../config";
+import { type Config, loadConfig, updateConfig } from "../config";
 import type { Tree } from "../git";
 import { switchMirror } from "../mirror";
 import { pickTree } from "../trees";
@@ -11,7 +11,9 @@ export function activate(config: Config, tree: Tree): Config {
   const spin = p.spinner();
   spin.start(`Switching to ${tree.name}`);
   const result = switchMirror(tree.path, config.mirrorDir);
-  spin.stop(`Switched to ${pc.bold(tree.name)} ${pc.dim(`(${result.files} files${result.copied ? ", copied" : ", hardlinked"})`)}`);
+  spin.stop(
+    `Switched to ${pc.bold(tree.name)} ${pc.dim(`(${result.files} files${result.copied ? ", copied" : ", hardlinked"})`)}`,
+  );
   if (result.copied) {
     p.log.warn("Tree and mirror are on different filesystems, so files were copied instead of hardlinked.");
   }

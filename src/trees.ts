@@ -1,4 +1,4 @@
-import { HafError, type Config } from "./config";
+import { type Config, HafError } from "./config";
 import { findTree, listTrees, type Tree } from "./git";
 import { p, pc, relativeTime, tildify, unwrap } from "./ui";
 

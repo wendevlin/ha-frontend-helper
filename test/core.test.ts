@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { patchConfigurationYaml, readDevelopmentRepo } from "../src/core";
 import { parsePrcArgs } from "../src/commands/prc";
+import { patchConfigurationYaml, readDevelopmentRepo } from "../src/core";
 
 let dir: string;
 const yaml = () => readFileSync(join(dir, "configuration.yaml"), "utf8");
@@ -13,7 +13,9 @@ beforeEach(() => (dir = mkdtempSync(join(tmpdir(), "haf-core-"))));
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 test("adds development_repo to an existing frontend block", () => {
-  write("default_config:\n\nfrontend:\n  themes: !include_dir_merge_named themes\n\nautomation: !include automations.yaml\n");
+  write(
+    "default_config:\n\nfrontend:\n  themes: !include_dir_merge_named themes\n\nautomation: !include automations.yaml\n",
+  );
   expect(patchConfigurationYaml(dir, "/m")).toBe(true);
   expect(yaml()).toBe(
     "default_config:\n\nfrontend:\n  development_repo: /m\n  themes: !include_dir_merge_named themes\n\nautomation: !include automations.yaml\n",

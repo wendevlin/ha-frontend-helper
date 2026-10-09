@@ -4,9 +4,10 @@ Home Assistant **f**rontend dev helper. It checks out PRs (optionally into their
 
 ## Install
 
+Requires Node.js 22+, `git` and the GitHub CLI (`gh`).
+
 ```sh
-bun install
-bun run install-bin        # builds a single binary to ~/.local/bin/haf
+npm install -g ha-frontend-helper   # provides the `haf` command
 haf init                   # one-time setup, then restart core once
 haf warp                   # optional: add haf workflows to Warp
 eval "$(haf completions zsh)"   # optional: add to ~/.zshrc
@@ -24,8 +25,9 @@ eval "$(haf completions zsh)"   # optional: add to ~/.zshrc
 | `haf ls` / `haf status` | Show trees, build state, PRs and the core setup |
 | `haf rm [tree]` | Remove a worktree (and optionally its branch) |
 | `cd "$(haf path 12345)"` | Jump into a tree |
+| `haf code [tree]` | Open a tree in a new VS Code window |
 
-`prc` also takes `--install` / `--no-install` (run `script/setup`) and `--use` / `--no-use`. Trees can be referred to by directory name, branch or PR number.
+`prc` also takes `--install` / `--no-install` (run `script/setup`), `--use` / `--no-use` and `--code` / `--no-code`. When run from VS Code's integrated terminal, `prc --tree` asks whether to open the new worktree in a new VS Code window. Trees can be referred to by directory name, branch or PR number.
 
 ## How switching works without restarts
 
@@ -48,8 +50,19 @@ The mirror dir must be on the same filesystem as your trees for hardlinks. `haf 
 
 ## Development
 
+Development uses [Bun](https://bun.sh); the published package runs on plain Node.
+
 ```sh
+bun install
 bun src/index.ts <command>   # run from source
+bun run build                # bundle to dist/haf.js (what npm ships)
+bun run install-bin          # or: standalone binary in ~/.local/bin/haf
 bun test
 bun run typecheck
+bun run lint                 # biome: lint + format check
+bun run format               # biome: apply fixes and formatting
 ```
+
+## License
+
+MIT

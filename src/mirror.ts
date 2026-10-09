@@ -1,6 +1,7 @@
 import {
   copyFileSync,
   existsSync,
+  type FSWatcher,
   linkSync,
   lstatSync,
   mkdirSync,
@@ -10,7 +11,6 @@ import {
   statSync,
   unlinkSync,
   watch,
-  type FSWatcher,
 } from "node:fs";
 import { join } from "node:path";
 

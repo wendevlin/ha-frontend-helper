@@ -1,9 +1,17 @@
-import { $ } from "bun";
-import { defineCommand } from "citty";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { configExists, CONFIG_PATH, DEFAULT_MIRROR_DIR, HafError, loadConfig, saveConfig, type Config } from "../config";
+import { defineCommand } from "citty";
+import { $ } from "execa";
+import {
+  CONFIG_PATH,
+  type Config,
+  configExists,
+  DEFAULT_MIRROR_DIR,
+  HafError,
+  loadConfig,
+  saveConfig,
+} from "../config";
 import { configurationYaml, coreSnippet, patchConfigurationYaml } from "../core";
 import { listTrees } from "../git";
 import { p, pc, tildify, unwrap } from "../ui";
@@ -21,9 +29,9 @@ function isFrontendRepo(path: string): boolean {
 
 /** The main checkout for a path inside any frontend worktree. */
 async function mainCheckout(path: string): Promise<string | undefined> {
-  const res = await $`git rev-parse --path-format=absolute --git-common-dir`.cwd(path).nothrow().quiet();
+  const res = await $({ cwd: path, reject: false })`git rev-parse --path-format=absolute --git-common-dir`;
   if (res.exitCode !== 0) return undefined;
-  const main = dirname(res.text().trim());
+  const main = dirname(res.stdout);
   return isFrontendRepo(main) ? main : undefined;
 }
 

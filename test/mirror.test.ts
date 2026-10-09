@@ -55,9 +55,9 @@ test("syncMirror relinks files replaced by rename-writes and skips unchanged", (
   const app = join(tree("a"), "hass_frontend/frontend_latest/app.js");
   rmSync(app);
   writeFileSync(app, "v2");
-  const result = syncMirror(tree("a"), mirror())!;
+  const result = syncMirror(tree("a"), mirror());
 
-  expect(result.linked).toBe(1);
+  expect(result?.linked).toBe(1);
   expect(readFileSync(live("frontend_latest/app.js"), "utf8")).toBe("v2");
 });
 
@@ -75,12 +75,17 @@ test("watchMirror picks up new files", async () => {
   switchMirror(tree("a"), mirror());
 
   const synced = new Promise<void>((resolve) => {
-    const stop = watchMirror(tree("a"), mirror(), () => {
-      if (existsSync(live("frontend_latest/new-chunk.js"))) {
-        stop();
-        resolve();
-      }
-    }, { debounceMs: 50 });
+    const stop = watchMirror(
+      tree("a"),
+      mirror(),
+      () => {
+        if (existsSync(live("frontend_latest/new-chunk.js"))) {
+          stop();
+          resolve();
+        }
+      },
+      { debounceMs: 50 },
+    );
   });
   await Bun.sleep(100);
   writeBuild("a", { "frontend_latest/new-chunk.js": "chunk" });
@@ -93,12 +98,17 @@ test("watchMirror survives the build dir being deleted and recreated", async () 
   switchMirror(tree("a"), mirror());
 
   const synced = new Promise<void>((resolve) => {
-    const stop = watchMirror(tree("a"), mirror(), () => {
-      if (readFileSync(live("index.html"), "utf8") === "new" && existsSync(live("frontend_latest/app.js"))) {
-        stop();
-        resolve();
-      }
-    }, { debounceMs: 50 });
+    const stop = watchMirror(
+      tree("a"),
+      mirror(),
+      () => {
+        if (readFileSync(live("index.html"), "utf8") === "new" && existsSync(live("frontend_latest/app.js"))) {
+          stop();
+          resolve();
+        }
+      },
+      { debounceMs: 50 },
+    );
   });
   await Bun.sleep(100);
   rmSync(join(tree("a"), "hass_frontend"), { recursive: true });

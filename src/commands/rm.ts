@@ -1,5 +1,5 @@
-import { $ } from "bun";
 import { defineCommand } from "citty";
+import { $ } from "execa";
 import { loadConfig } from "../config";
 import { isDirty, listTrees } from "../git";
 import { pickTree } from "../trees";
@@ -27,17 +27,20 @@ export default defineCommand({
 
     // Move core off this tree before its files disappear.
     if (config.active === tree.path) {
-      const main = (await listTrees(config.frontendRepo))[0]!;
+      const main = (await listTrees(config.frontendRepo))[0];
       activate(config, main);
     }
 
-    await $`git worktree remove ${dirty || args.force ? ["--force"] : []} ${tree.path}`.cwd(config.frontendRepo);
+    await $({
+      cwd: config.frontendRepo,
+      stdio: "inherit",
+    })`git worktree remove ${dirty || args.force ? ["--force"] : []} ${tree.path}`;
     p.log.success(`Removed ${tree.name}`);
 
     if (tree.branch) {
       const del = args.force || (await confirm({ message: `Delete branch ${pc.cyan(tree.branch)} too?` }));
       if (del) {
-        await $`git branch -D ${tree.branch}`.cwd(config.frontendRepo).quiet();
+        await $({ cwd: config.frontendRepo })`git branch -D ${tree.branch}`;
         p.log.success(`Deleted branch ${tree.branch}`);
       }
     }

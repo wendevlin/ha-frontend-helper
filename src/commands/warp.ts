@@ -1,7 +1,7 @@
-import { defineCommand } from "citty";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { defineCommand } from "citty";
 import { p, pc, tildify } from "../ui";
 
 interface Workflow {
@@ -69,7 +69,7 @@ function toYaml(w: Workflow): string {
       lines.push(`  - name: ${a.name}`, `    description: ${quote(a.description)}`, `    default_value: ~`);
     }
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 export default defineCommand({

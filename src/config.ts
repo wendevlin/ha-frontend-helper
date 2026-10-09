@@ -33,7 +33,7 @@ export function loadConfig(): Config {
 
 export function saveConfig(config: Config): void {
   mkdirSync(dirname(CONFIG_PATH), { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
+  writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 export function updateConfig(patch: Partial<Config>): Config {

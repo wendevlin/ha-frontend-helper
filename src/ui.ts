@@ -41,5 +41,5 @@ export function relativeTime(date: Date): string {
 
 export function tildify(path: string): string {
   const home = process.env.HOME;
-  return home && path.startsWith(home) ? "~" + path.slice(home.length) : path;
+  return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 }

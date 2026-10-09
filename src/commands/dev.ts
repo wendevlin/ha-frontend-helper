@@ -1,7 +1,8 @@
-import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, updateConfig, type Config } from "../config";
+import { defineCommand } from "citty";
+import { execa } from "execa";
+import { type Config, loadConfig, updateConfig } from "../config";
 import { run, type Tree } from "../git";
 import { switchMirror, watchMirror } from "../mirror";
 import { pickTree } from "../trees";
@@ -44,13 +45,13 @@ export async function runDev(config: Config, tree: Tree): Promise<never> {
     },
   );
 
-  const proc = Bun.spawn(["script/develop"], { cwd: tree.path, stdio: ["inherit", "inherit", "inherit"] });
+  const proc = execa("script/develop", { cwd: tree.path, stdio: "inherit", reject: false });
   // Ctrl+C reaches script/develop through the process group; just wait for it.
   process.on("SIGINT", () => {});
-  const code = await proc.exited;
+  const { exitCode } = await proc;
   stop();
   setTitle("");
-  process.exit(code);
+  process.exit(exitCode ?? 1);
 }
 
 export default defineCommand({

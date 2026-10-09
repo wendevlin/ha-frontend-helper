@@ -29,12 +29,11 @@ export function patchConfigurationYaml(coreConfigDir: string, mirrorDir: string)
     next = `${yaml.trimEnd()}\n\n${coreSnippet(mirrorDir)}\n`;
   } else {
     let end = start + 1;
-    while (end < lines.length && (lines[end]!.trim() === "" || /^\s/.test(lines[end]!))) end++;
+    while (end < lines.length && (lines[end].trim() === "" || /^\s/.test(lines[end]))) end++;
     const block = lines.slice(start + 1, end);
     const existing = block.findIndex((l) => /^\s+development_repo:/.test(l));
     if (existing !== -1) {
-      const indent = block[existing]!.match(/^\s+/)![0];
-      block[existing] = `${indent}development_repo: ${mirrorDir}`;
+      block[existing] = block[existing].replace(/development_repo:.*/, `development_repo: ${mirrorDir}`);
     } else {
       const indent = block.find((l) => l.trim())?.match(/^\s+/)?.[0] ?? "  ";
       block.unshift(`${indent}development_repo: ${mirrorDir}`);

@@ -1,7 +1,8 @@
-#!/usr/bin/env bun
-import { defineCommand, runMain, type CommandDef } from "citty";
+#!/usr/bin/env node
+import { type CommandDef, defineCommand, runMain } from "citty";
+import { ExecaError } from "execa";
 import pkg from "../package.json";
-import { HafError } from "./config";
+import code from "./commands/code";
 import completions from "./commands/completions";
 import dev from "./commands/dev";
 import init from "./commands/init";
@@ -13,13 +14,29 @@ import status from "./commands/status";
 import sync from "./commands/sync";
 import use from "./commands/use";
 import warp from "./commands/warp";
+import { HafError } from "./config";
 import { p } from "./ui";
 
-const commands: Record<string, CommandDef<any>> = { init, prc, use, dev, sync, ls, rm, path, status, warp, completions };
+// biome-ignore lint/suspicious/noExplicitAny: commands have different arg shapes
+const commands: Record<string, CommandDef<any>> = {
+  init,
+  prc,
+  use,
+  dev,
+  sync,
+  ls,
+  rm,
+  path,
+  code,
+  status,
+  warp,
+  completions,
+};
 
 // citty prints a stack trace for any error; show expected ones as a clean message.
 for (const command of Object.values(commands)) {
-  const run = command.run!;
+  const run = command.run;
+  if (!run) continue;
   command.run = async (ctx) => {
     try {
       await run(ctx);
@@ -41,6 +58,8 @@ const main = defineCommand({
 function handleError(err: unknown): never {
   if (err instanceof HafError) {
     p.log.error(err.message);
+  } else if (err instanceof ExecaError) {
+    p.log.error(err.shortMessage);
   } else {
     console.error(err);
   }

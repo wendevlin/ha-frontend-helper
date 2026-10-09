@@ -1,9 +1,10 @@
-import { $ } from "bun";
-import { defineCommand } from "citty";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { HafError, loadConfig, type Config } from "../config";
-import { assertTools, isDirty, listTrees, prView, recordPr, run, slug, type PrInfo, type Tree } from "../git";
+import { defineCommand } from "citty";
+import { $ } from "execa";
+import { type Config, HafError, loadConfig } from "../config";
+import { inVSCode, openInVSCode } from "../editor";
+import { assertTools, isDirty, listTrees, type PrInfo, prView, recordPr, run, slug, type Tree } from "../git";
 import { describeTree } from "../trees";
 import { confirm, link, p, pc, tildify } from "../ui";
 import { useTree } from "./use";
@@ -24,7 +25,7 @@ export function parsePrcArgs(raw: string[]): PrcArgs {
   let treeValueIndex = -1;
 
   for (let i = 0; i < raw.length; i++) {
-    const arg = raw[i]!;
+    const arg = raw[i];
     if (arg === "--tree" || arg === "-t") {
       tree = "";
       const next = raw[i + 1];
@@ -50,7 +51,10 @@ export function parsePrcArgs(raw: string[]): PrcArgs {
 
 async function checkoutInMain(config: Config, pr: PrInfo): Promise<string> {
   if (await isDirty(config.frontendRepo)) {
-    const go = await confirm({ message: "The main checkout has uncommitted changes. Check out anyway?", initialValue: false });
+    const go = await confirm({
+      message: "The main checkout has uncommitted changes. Check out anyway?",
+      initialValue: false,
+    });
     if (!go) process.exit(1);
   }
   await run(["gh", "pr", "checkout", String(pr.number)], config.frontendRepo);
@@ -64,14 +68,14 @@ async function checkoutInTree(config: Config, pr: PrInfo, name: string): Promise
   mkdirSync(config.treesDir, { recursive: true });
   await run(["git", "worktree", "add", "--detach", path], config.frontendRepo);
   try {
-    const res = await $`gh pr checkout ${pr.number}`.cwd(path).nothrow();
+    const res = await $({ cwd: path, stdio: "inherit", reject: false })`gh pr checkout ${pr.number}`;
     if (res.exitCode !== 0) {
       // Usually the PR branch name is already checked out in another tree (e.g. a fork's "dev").
       p.log.warn(`Retrying with a dedicated branch name pr-${pr.number}`);
       await run(["gh", "pr", "checkout", String(pr.number), "--branch", `pr-${pr.number}`], path);
     }
   } catch (err) {
-    await $`git worktree remove --force ${path}`.cwd(config.frontendRepo).nothrow().quiet();
+    await $({ cwd: config.frontendRepo, reject: false })`git worktree remove --force ${path}`;
     throw err;
   }
   return path;
@@ -84,6 +88,7 @@ export default defineCommand({
     tree: { type: "string", alias: "t", valueHint: "name", description: "Check out into a worktree (name optional)" },
     install: { type: "boolean", description: "Run script/setup afterwards (--no-install to skip)" },
     use: { type: "boolean", description: "Switch core to the checkout afterwards" },
+    code: { type: "boolean", description: "Open a new worktree in a new VS Code window (--no-code to skip)" },
   },
   async run({ args, rawArgs }) {
     await assertTools("git", "gh");
@@ -105,7 +110,7 @@ export default defineCommand({
       );
       if (existing) {
         p.log.info(`PR #${number} already has a worktree: ${pc.bold(existing.name)} ${pc.dim(tildify(existing.path))}`);
-        await $`gh pr checkout ${number}`.cwd(existing.path).nothrow();
+        await $({ cwd: existing.path, stdio: "inherit", reject: false })`gh pr checkout ${number}`;
         path = existing.path;
       } else {
         path = await checkoutInTree(config, pr, tree || `pr-${number}-${slug(pr.headRefName)}`);
@@ -116,14 +121,19 @@ export default defineCommand({
 
     const install =
       args.install ??
-      await confirm({ message: "Install dependencies (script/setup)?", initialValue: path !== config.frontendRepo });
+      (await confirm({ message: "Install dependencies (script/setup)?", initialValue: path !== config.frontendRepo }));
     if (install) await run(["script/setup"], path);
 
     const target: Tree | undefined = (await listTrees(config.frontendRepo)).find((t) => t.path === path);
     if (!target) throw new HafError(`Could not find the worktree at ${path}`);
     p.log.message(describeTree(target));
 
-    const use = args.use ?? await confirm({ message: "Switch core to this frontend now?" });
+    // Only worktrees: the main checkout is usually the window you're already in.
+    const code =
+      args.code ?? (!target.isMain && inVSCode() && (await confirm({ message: "Open it in a new VS Code window?" })));
+    if (code) await openInVSCode(path);
+
+    const use = args.use ?? (await confirm({ message: "Switch core to this frontend now?" }));
     if (use) return useTree(config, target);
     p.outro(path === config.frontendRepo ? "Done." : `Done. ${pc.dim(`cd ${tildify(path)}`)}`);
   },

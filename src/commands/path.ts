@@ -3,7 +3,7 @@ import { loadConfig } from "../config";
 import { pickTree } from "../trees";
 
 export default defineCommand({
-  meta: { name: "path", description: "Print a tree's path, e.g. cd \"$(haf path 12345)\"" },
+  meta: { name: "path", description: 'Print a tree\'s path, e.g. cd "$(haf path 12345)"' },
   args: {
     tree: { type: "positional", required: false, description: "Tree name, branch or PR number (default: active)" },
   },

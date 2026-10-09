@@ -1,6 +1,6 @@
-import { $ } from "bun";
-import { existsSync, statSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { accessSync, constants, existsSync, statSync } from "node:fs";
+import { basename, delimiter, join, resolve } from "node:path";
+import { $, execa } from "execa";
 import { HafError } from "./config";
 
 export interface Tree {
@@ -24,9 +24,9 @@ export interface PrInfo {
 
 /** Run a command with inherited stdio; throws HafError on failure. */
 export async function run(cmd: string[], cwd: string): Promise<void> {
-  const proc = Bun.spawn(cmd, { cwd, stdio: ["inherit", "inherit", "inherit"] });
-  const code = await proc.exited;
-  if (code !== 0) throw new HafError(`\`${cmd.join(" ")}\` failed with exit code ${code}`);
+  const [file, ...args] = cmd;
+  const { exitCode } = await execa(file, args, { cwd, stdio: "inherit", reject: false });
+  if (exitCode !== 0) throw new HafError(`\`${cmd.join(" ")}\` failed with exit code ${exitCode}`);
 }
 
 export function buildTime(treePath: string): Date | undefined {
@@ -35,7 +35,7 @@ export function buildTime(treePath: string): Date | undefined {
 }
 
 export async function listTrees(repo: string): Promise<Tree[]> {
-  const out = await $`git worktree list --porcelain`.cwd(repo).text();
+  const { stdout: out } = await $({ cwd: repo })`git worktree list --porcelain`;
   const trees: Tree[] = [];
   for (const block of out.trim().split("\n\n")) {
     const fields = new Map<string, string>();
@@ -61,10 +61,10 @@ export async function listTrees(repo: string): Promise<Tree[]> {
 
 async function prForTree(repo: string, tree: Tree): Promise<number | undefined> {
   if (tree.branch) {
-    const recorded = await $`git config --get branch.${tree.branch}.haf-pr`.cwd(repo).nothrow().quiet().text();
-    if (recorded.trim()) return Number(recorded.trim());
+    const { stdout: recorded } = await $({ cwd: repo, reject: false })`git config --get branch.${tree.branch}.haf-pr`;
+    if (recorded) return Number(recorded);
     // gh pr checkout records the PR ref as the branch's merge target for fork PRs.
-    const merge = await $`git config --get branch.${tree.branch}.merge`.cwd(repo).nothrow().quiet().text();
+    const { stdout: merge } = await $({ cwd: repo, reject: false })`git config --get branch.${tree.branch}.merge`;
     const m = merge.match(/refs\/pull\/(\d+)\/head/);
     if (m) return Number(m[1]);
   }
@@ -82,28 +82,40 @@ export function findTree(trees: Tree[], query: string): Tree | undefined {
 }
 
 export async function prView(repo: string, number: number): Promise<PrInfo> {
-  const res = await $`gh pr view ${number} --json number,title,headRefName,url,author`.cwd(repo).nothrow().quiet();
+  const res = await $({ cwd: repo, reject: false })`gh pr view ${number} --json number,title,headRefName,url,author`;
   if (res.exitCode !== 0) {
-    throw new HafError(`Could not load PR #${number}: ${res.stderr.toString().trim()}`);
+    throw new HafError(`Could not load PR #${number}: ${res.stderr}`);
   }
-  return res.json() as PrInfo;
+  return JSON.parse(res.stdout) as PrInfo;
 }
 
 /** Remember which PR a checkout's branch belongs to (gh only records it for fork PRs). */
 export async function recordPr(path: string, number: number): Promise<void> {
-  const branch = (await $`git branch --show-current`.cwd(path).text()).trim();
-  if (branch) await $`git config branch.${branch}.haf-pr ${number}`.cwd(path).quiet();
+  const { stdout: branch } = await $({ cwd: path })`git branch --show-current`;
+  if (branch) await $({ cwd: path })`git config branch.${branch}.haf-pr ${number}`;
 }
 
 export async function isDirty(path: string): Promise<boolean> {
-  const out = await $`git status --porcelain --untracked-files=no`.cwd(path).text();
-  return out.trim().length > 0;
+  const { stdout } = await $({ cwd: path })`git status --porcelain --untracked-files=no`;
+  return stdout.length > 0;
 }
 
 export async function assertTools(...tools: string[]): Promise<void> {
   for (const tool of tools) {
-    if (!Bun.which(tool)) throw new HafError(`\`${tool}\` was not found on PATH.`);
+    if (!which(tool)) throw new HafError(`\`${tool}\` was not found on PATH.`);
   }
+}
+
+/** Absolute path of an executable on PATH, like `which`. */
+export function which(bin: string): string | undefined {
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    const file = join(dir, bin);
+    try {
+      accessSync(file, constants.X_OK);
+      return file;
+    } catch {}
+  }
+  return undefined;
 }
 
 export function slug(text: string, max = 40): string {
