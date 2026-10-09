@@ -21,7 +21,7 @@ eval "$(haf completions zsh)"   # optional: add to ~/.zshrc
 
 | Command | What it does |
 | --- | --- |
-| `haf prc 12345` | `gh pr checkout` in the main checkout |
+| `haf prc 12345` | `gh pr checkout` in the main checkout (a PR URL works too) |
 | `haf prc 12345 --tree [name]` | Check out into `<trees>/pr-12345-<branch>` (or `<name>`) as a worktree |
 | `haf prc --set-defaults` | Choose Ask / Always / Never for each `prc` question |
 | `haf use [tree]` | Interactive pick of the frontend core serves; refresh the browser and it's live |

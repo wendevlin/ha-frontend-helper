@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parsePrcArgs } from "../src/commands/prc";
+import { parsePrcArgs, parsePrRef } from "../src/commands/prc";
 import { patchConfigurationYaml, readDevelopmentRepo } from "../src/core";
 
 let dir: string;
@@ -36,7 +36,22 @@ test("appends a frontend block when missing", () => {
   expect(yaml()).toBe("default_config:\n\nfrontend:\n  development_repo: /m\n");
 });
 
+test("parsePrRef accepts numbers and frontend PR URLs", () => {
+  expect(parsePrRef("54716")).toBe(54716);
+  expect(parsePrRef("#54716")).toBe(54716);
+  expect(parsePrRef("https://github.com/home-assistant/frontend/pull/54716")).toBe(54716);
+  expect(parsePrRef("https://github.com/home-assistant/frontend/pull/54716/files#diff-abc")).toBe(54716);
+  expect(parsePrRef("github.com/home-assistant/frontend/pull/54716")).toBe(54716);
+  expect(() => parsePrRef("https://github.com/home-assistant/core/pull/54716")).toThrow("home-assistant/core");
+  expect(() => parsePrRef("nope")).toThrow("Usage");
+  expect(() => parsePrRef(undefined)).toThrow("Usage");
+});
+
 test("parsePrcArgs handles the optional --tree value", () => {
+  expect(parsePrcArgs(["https://github.com/home-assistant/frontend/pull/54716", "-t"])).toEqual({
+    number: 54716,
+    tree: "",
+  });
   expect(parsePrcArgs(["123"])).toEqual({ number: 123, tree: undefined });
   expect(parsePrcArgs(["123", "--tree"])).toEqual({ number: 123, tree: "" });
   expect(parsePrcArgs(["123", "--tree", "foo"])).toEqual({ number: 123, tree: "foo" });

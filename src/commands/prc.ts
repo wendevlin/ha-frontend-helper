@@ -42,11 +42,20 @@ export function parsePrcArgs(raw: string[]): PrcArgs {
     tree = positionals.splice(treeValueIndex, 1)[0];
   }
 
-  const number = Number(positionals[0]?.replace(/^#/, ""));
-  if (!Number.isInteger(number) || number <= 0) {
-    throw new HafError("Usage: haf prc <pr-number> [--tree [name]]");
+  return { number: parsePrRef(positionals[0]), tree };
+}
+
+/** A PR number from "123", "#123" or a home-assistant/frontend PR URL. */
+export function parsePrRef(ref: string | undefined): number {
+  const url = ref?.match(/^(?:https?:\/\/)?github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/i);
+  if (url && url[1].toLowerCase() !== "home-assistant/frontend") {
+    throw new HafError(`${ref} is a ${url[1]} PR, not a home-assistant/frontend one.`);
   }
-  return { number, tree };
+  const number = Number(url ? url[2] : ref?.replace(/^#/, ""));
+  if (!Number.isInteger(number) || number <= 0) {
+    throw new HafError("Usage: haf prc <pr-number-or-url> [--tree [name]]");
+  }
+  return number;
 }
 
 async function checkoutInMain(config: Config, pr: PrInfo): Promise<string> {
@@ -112,7 +121,7 @@ async function setDefaults(config: Config): Promise<void> {
 export default defineCommand({
   meta: { name: "prc", description: "Check out a pull request, optionally into its own worktree" },
   args: {
-    number: { type: "positional", required: false, description: "PR number" },
+    number: { type: "positional", required: false, description: "PR number or URL" },
     tree: { type: "string", alias: "t", valueHint: "name", description: "Check out into a worktree (name optional)" },
     install: { type: "boolean", description: "Run script/setup afterwards (--no-install to skip)" },
     use: { type: "boolean", description: "Switch core to the checkout afterwards" },
