@@ -68,6 +68,14 @@ bun run lint                 # biome: lint + format check
 bun run format               # biome: apply fixes and formatting
 ```
 
+CI runs lint, typecheck, tests and a Node smoke test on Linux and macOS for every push to `main` and every PR.
+
+### Releasing
+
+1. Bump `version` in `package.json` and push.
+2. Create a GitHub release with the tag `v<version>`, e.g. `v0.2.0`. A prerelease is published under npm's `next` tag.
+3. The release workflow checks that the tag matches `package.json`, runs all checks and publishes to npm with provenance via [trusted publishing](https://docs.npmjs.com/trusted-publishers).
+
 ## License
 
 MIT
